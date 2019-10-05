@@ -130,13 +130,24 @@ def main():
     parser = argparse.ArgumentParser()
 
     if 'SM_MODEL_DIR' in os.environ:
+        # Running on sagemaker
         parser.add_argument('--model-dir', type=str, default=os.environ['SM_MODEL_DIR'])
         parser.add_argument('--output-data-dir', type=str, default=os.environ['SM_OUTPUT_DATA_DIR'])
         parser.add_argument('--data-dir', type=str, default=os.environ['SM_CHANNEL_TRAINING'])
+
+        # Since sagemaker cannot accept bool flags, passed as bool arg
+        parser.add_argument('--no-cuda', type=bool, default=False)
+        parser.add_argument('--verbose', type=bool, default=False)
+        parser.add_argument('--sagemaker-logging', type=bool, default=False)
+
     else:
         parser.add_argument('--model-dir', type=str, default=None)
         parser.add_argument('--output-data-dir', type=str, default=None)
         parser.add_argument('--data-dir', type=str, required=True)
+
+        parser.add_argument('--no-cuda', dest="no_cuda", action='store_true')
+        parser.add_argument('--verbose', dest="verbose", action="store_true")
+        parser.add_argument('--sagemaker-logging', dest="sagemaker_logging", action="store_true")
 
     parser.add_argument('--train-data-file', type=str, required=True)
     parser.add_argument('--valid-data-file', type=str, required=True)
@@ -146,12 +157,7 @@ def main():
     parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--dropout', type=float, default=0.1)
-
-    parser.add_argument('--no-cuda', dest="no_cuda", action='store_true')
-    parser.add_argument('--verbose', dest="verbose", action="store_true")
-
     parser.add_argument('--num-workers', type=int, default=0)
-    parser.add_argument('--sagemaker-logging', dest="sagemaker_logging", action="store_true")
 
     args = parser.parse_args()
     args.cuda = not args.no_cuda
