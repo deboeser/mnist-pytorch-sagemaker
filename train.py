@@ -81,40 +81,45 @@ def eval_epoch(model, valid_loader, loss_fn):
 
 
 def train(args, model, train_loader, valid_loader):
-    hist_loss_train = []
-    hist_loss_val = []
-    hist_accu_train = []
-    hist_accu_val = []
+    hist_train_loss = []
+    hist_val_loss = []
+    hist_train_accu = []
+    hist_val_accu = []
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     loss_fn = torch.nn.CrossEntropyLoss()
 
-    if args.log_file:
+    if args.output_data_dir:
         with open(args.log_file, "w") as f:
-            f.write('epoch,loss_train,accu_train,loss_val,accu_val\n')
+            f.write('epoch,train_loss,train_accu,val_loss,val_accu\n')
 
     for epoch in range(args.epochs):
         print("[ Epoch {} / {} ]".format(epoch, args.epochs))
 
-        loss_train, accu_train = train_epoch(model, train_loader, optimizer, loss_fn)
-        hist_loss_train.append(loss_train)
-        hist_accu_train.append(accu_train)
+        train_loss, train_accu = train_epoch(model, train_loader, optimizer, loss_fn)
+        hist_train_loss.append(train_loss)
+        hist_train_accu.append(train_accu)
 
-        loss_val, accu_val = eval_epoch(model, valid_loader, loss_fn)
-        hist_loss_val.append(loss_val)
-        hist_accu_val.append(accu_val)
+        val_loss, val_accu = eval_epoch(model, valid_loader, loss_fn)
+        hist_val_loss.append(val_loss)
+        hist_val_accu.append(val_accu)
 
-        print("[ METRIC ] Epoch {epoch:}: loss_train = {loss_train: 8.5f}, loss_val = {loss_val: 8.5f}, "
-              "accu_train = {accu_train: 3.3f}, accu_val = {accu_val: 3.3f}".format(
-                  epoch=epoch, loss_train=loss_train, loss_val=loss_val, accu_train=accu_train, accu_val=accu_val))
+        print("[ METRIC ] Epoch {epoch:}: train_loss = {train_loss:8.5f}, val_loss = {val_loss:8.5f}, "
+              "train_accu = {train_accu:3.3f}, val_accu = {val_accu:3.3f}".format(
+                  epoch=epoch, train_loss=train_loss, val_loss=val_loss, train_accu=train_accu, val_accu=val_accu))
 
-        if args.log_file:
-            vals = [epoch, loss_train, accu_train, loss_val, accu_val]
+        if args.sagemaker_logging:
+            print("train_loss={train_loss:8.8f};  val_loss={val_loss:8.8f};  "
+                  "train_accu={train_accu:1.5f};  val_accu={val_accu:1.5f};".format(
+                      train_loss=train_loss, val_loss=val_loss, train_accu=train_accu, val_accu=val_accu))
+
+        if args.output_data_dir:
+            vals = [epoch+1, train_loss, train_accu, val_loss, val_accu]
             with open(args.log_file, "a") as f:
                 f.write(",".join(["{:8.5f}".format(e) for e in vals]) + "\n")
 
         if args.model_dir:
-            if accu_val >= max(hist_accu_val):
+            if val_accu >= max(hist_val_accu):
                 filename = os.path.join(args.model_dir, "model.pt")
                 torch.save(model.state_dict(), filename)
                 if args.verbose:
@@ -124,8 +129,18 @@ def train(args, model, train_loader, valid_loader):
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--train-data', type=str, required=True)
-    parser.add_argument('--valid-data', type=str, required=True)
+    if 'SM_MODEL_DIR' in os.environ:
+        parser.add_argument('--model-dir', type=str, default=os.environ['SM_MODEL_DIR'])
+        parser.add_argument('--output-data-dir', type=str, default=os.environ['SM_OUTPUT_DATA_DIR'])
+        parser.add_argument('--data-dir', type=str, default=os.environ['SM_CHANNEL_TRAINING'])
+    else:
+        parser.add_argument('--model-dir', type=str, default=None)
+        parser.add_argument('--output-data-dir', type=str, default=None)
+        parser.add_argument('--data-dir', type=str, required=True)
+
+    parser.add_argument('--train-data-file', type=str, required=True)
+    parser.add_argument('--valid-data-file', type=str, required=True)
+    parser.add_argument('--model-name', type=str, default="model")
 
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--batch-size', type=int, default=128)
@@ -136,8 +151,7 @@ def main():
     parser.add_argument('--verbose', dest="verbose", action="store_true")
 
     parser.add_argument('--num-workers', type=int, default=0)
-    parser.add_argument('--model-dir', type=str)
-    parser.add_argument('--log-file', type=str)
+    parser.add_argument('--sagemaker-logging', dest="sagemaker_logging", action="store_true")
 
     args = parser.parse_args()
     args.cuda = not args.no_cuda
@@ -146,6 +160,15 @@ def main():
 
     if args.verbose:
         print_config(args)
+
+    args.train_data = os.path.join(args.data_dir, args.train_data_file)
+    args.valid_data = os.path.join(args.data_dir, args.valid_data_file)
+
+    if args.output_data_dir:
+        args.log_file = os.path.join(args.output_data_dir, args.model_name + "_log.csv")
+
+    if args.model_dir:
+        args.model_file = os.path.join(args.model_dir, args.model_name + "_model.pt")
 
     if args.verbose:
         print("\n### Creating Data Loaders ###\n")
