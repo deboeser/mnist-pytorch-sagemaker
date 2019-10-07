@@ -94,7 +94,7 @@ def train(args, model, train_loader, valid_loader):
             f.write('epoch,train_loss,train_accu,val_loss,val_accu\n')
 
     for epoch in range(args.epochs):
-        print("[ Epoch {} / {} ]".format(epoch, args.epochs))
+        print("[ EPOCH {} / {} ]".format(epoch+1, args.epochs))
 
         train_loss, train_accu = train_epoch(model, train_loader, optimizer, loss_fn)
         hist_train_loss.append(train_loss)
@@ -123,7 +123,7 @@ def train(args, model, train_loader, valid_loader):
                 filename = os.path.join(args.model_dir, "model.pt")
                 torch.save(model.state_dict(), filename)
                 if args.verbose:
-                    print("[INFO] Best model saved")
+                    print("[ INFO ] Best model saved")
 
 
 def main():
